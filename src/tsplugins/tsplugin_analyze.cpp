@@ -143,7 +143,7 @@ bool ts::AnalyzePlugin::start()
     _output_name = value(u"output-file");
     _output_interval = MilliSecPerSec * intValue<MilliSecond>(u"interval", 0);
     _multiple_output = present(u"multiple-files");
-    _output = _output_name.empty() ? &std::cout : &_output_stream;
+    _output = static_cast<std::ostream *>(_output_name.empty() ? &std::cout : &_output_stream);
     _analyzer_options.getOptions(*this);
     _analyzer.setAnalysisOptions(_analyzer_options);
     _current_packet = 0;
@@ -269,15 +269,17 @@ ts::ProcessorPlugin::Status ts::AnalyzePlugin::processPacket (TSPacket& pkt, boo
     // Feed the analyzer with one packet
     _analyzer.feedPacket (pkt);
 
+
     // With --interval, check if it is time to produce a report
     if (_output_interval > 0) {
         if (_current_packet == 1) {
             // Initialize the repetition when the first packet arrives
             computeNextReportTime(Time::CurrentUTC(), _output_interval);
         }
-        else if (_next_report_packet == 0 || (_next_report_packet > 0 && _current_packet >= _next_report_packet)) {
+        else if (_next_report_packet > 0 && _current_packet >= _next_report_packet) {
             // Check current time to see if this is time to produce a report
             const Time current_utc(Time::CurrentUTC());
+
             if (current_utc < _next_report_time) {
                 // False alarm, we have to wait some more
                 computeNextReportTime(current_utc, _next_report_time - current_utc);
@@ -288,8 +290,20 @@ ts::ProcessorPlugin::Status ts::AnalyzePlugin::processPacket (TSPacket& pkt, boo
                     return TSP_END;
                 }
                 // Reset analysis context
-                _analyzer.reset();
+//                _analyzer.reset();
                 computeNextReportTime (current_utc, _output_interval);
+            }
+        }
+        else if (_next_report_packet == 0) {
+            const Time current_utc(Time::CurrentUTC());
+            if (current_utc > _next_report_time) {
+                // Time to produce a report
+                if (!produceReport()) {
+                    return TSP_END;
+                }
+                // Reset analysis context
+//                _analyzer.reset();
+                computeNextReportTime(current_utc, _output_interval);
             }
         }
     }

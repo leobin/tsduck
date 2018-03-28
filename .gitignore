@@ -44,3 +44,5 @@ cov-int
 *.bin
 *.ts
 *.trp
+.idea
+cmake-build-debug
